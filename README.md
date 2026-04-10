@@ -4,20 +4,54 @@ Standalone plugin that displays a user-loaded image as the viewport background i
 
 ## Features
 
-- Load any image (PNG, JPG, BMP, TIFF) as viewport background
+- Load multiple images (PNG, JPG, BMP, TIFF) as viewport background
+- Switch between images via a list in the settings panel
+- Keep aspect ratio option (enabled by default)
 - Molecule renders on top with correct transparency
-- Simple UI: load/clear buttons in Display Type Settings
+- Simple UI in Display Type Settings
 
-## Requirements
+## Quick Install (pre-built binaries)
 
-- Avogadro 2 (tested with 1.100.0 / avogadrolibs 1.100.0)
-- Qt 6
-- CMake 3.16+
-- avogadrolibs source headers and Eigen headers (for compilation)
+Download the latest release for your platform from the [Releases page](https://github.com/odurif0/avogadro-background-image/releases), then copy the plugin file to the Avogadro plugins directory.
 
-## Build
+### Linux
 
 ```bash
+# System install (e.g. openSUSE, Fedora)
+sudo cp BackgroundImageScenePlugin-linux-x86_64.so /usr/lib64/avogadro2/plugins/BackgroundImageScenePlugin.so
+
+# Debian/Ubuntu
+sudo cp BackgroundImageScenePlugin-linux-x86_64.so /usr/lib/x86_64-linux-gnu/avogadro2/plugins/BackgroundImageScenePlugin.so
+```
+
+### Windows
+
+1. Download `BackgroundImageScenePlugin-windows-x86_64.dll`
+2. Copy it to: `C:\Program Files\Avogadro2\lib\avogadro2\plugins\BackgroundImageScenePlugin.dll`
+3. Restart Avogadro 2
+
+### macOS
+
+```bash
+cp BackgroundImageScenePlugin-macos-x86_64.dylib \
+   "/Applications/Avogadro2.app/Contents/lib/avogadro2/plugins/BackgroundImageScenePlugin.dylib"
+```
+
+## Build from Source
+
+### Requirements
+
+- Avogadro 2 installed (tested with 1.100.0)
+- Qt 6
+- CMake 3.16+
+- [avogadrolibs](https://github.com/OpenChemistry/avogadrolibs) source (for headers)
+- [Eigen](https://gitlab.com/libeigen/eigen) source (for headers)
+
+### Compile
+
+```bash
+git clone https://github.com/OpenChemistry/avogadrolibs.git
+git clone https://gitlab.com/libeigen/eigen.git
 mkdir build && cd build
 cmake .. \
   -DAVOGADRO_SRC_DIR=/path/to/avogadrolibs \
@@ -25,12 +59,7 @@ cmake .. \
   -DAVOGADRO_QTGUI_LIB=/usr/lib64/libAvogadroQtGui.so.1 \
   -DAVOGADRO_RENDERING_LIB=/usr/lib64/libAvogadroRendering.so.1
 make
-```
-
-## Install
-
-```bash
-sudo cp BackgroundImageScenePlugin.so /usr/lib64/avogadro2/plugins/
+sudo make install
 ```
 
 ## Usage
@@ -38,8 +67,9 @@ sudo cp BackgroundImageScenePlugin.so /usr/lib64/avogadro2/plugins/
 1. Launch Avogadro 2
 2. Open **View → Display Type Settings**
 3. Enable **Background Image**
-4. Click **Load Image...** and select an image file
-5. Build your molecule on top of the image
+4. Click **Add Images...** to load one or more images
+5. Select an image from the list to set it as background
+6. Build your molecule on top of the image
 
 ## How it works
 

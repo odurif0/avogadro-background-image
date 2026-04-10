@@ -1,0 +1,165 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  AVOGADRO_VERSION: master
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build libeigen3-dev libgl1-mesa-dev \
+            qt6-base-dev qt6-opengl-dev
+
+      - name: Clone avogadrolibs headers
+        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
+
+      - name: Build avogadrolibs (minimal)
+        run: |
+          cmake -S ~/avogadrolibs -B ~/avogadro-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF \
+            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
+            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+          cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
+          sudo cmake --install ~/avogadro-build
+
+      - name: Build plugin
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DAVOGADRO_SRC_DIR=$HOME/avogadrolibs
+          cmake --build build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BackgroundImageScenePlugin-linux-x86_64
+          path: build/BackgroundImageScenePlugin.so
+
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtopengl'
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Clone avogadrolibs headers
+        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git $env:USERPROFILE\avogadrolibs
+
+      - name: Clone Eigen
+        run: git clone --depth 1 https://gitlab.com/libeigen/eigen.git $env:USERPROFILE\eigen
+
+      - name: Build avogadrolibs (minimal)
+        run: |
+          cmake -S "$env:USERPROFILE\avogadrolibs" -B "$env:USERPROFILE\avogadro-build" `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF `
+            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF `
+            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+          cmake --build "$env:USERPROFILE\avogadro-build" --target AvogadroCore AvogadroRendering AvogadroQtGui --config ${{ env.BUILD_TYPE }}
+          cmake --install "$env:USERPROFILE\avogadro-build"
+
+      - name: Build plugin
+        run: |
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DAVOGADRO_SRC_DIR="$env:USERPROFILE\avogadrolibs" `
+            -DEIGEN_SRC_DIR="$env:USERPROFILE\eigen"
+          cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BackgroundImageScenePlugin-windows-x86_64
+          path: build/${{ env.BUILD_TYPE }}/BackgroundImageScenePlugin.dll
+
+  build-macos:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          modules: 'qtopengl'
+
+      - name: Install Eigen
+        run: brew install eigen
+
+      - name: Clone avogadrolibs headers
+        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
+
+      - name: Build avogadrolibs (minimal)
+        run: |
+          cmake -S ~/avogadrolibs -B ~/avogadro-build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF \
+            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
+            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+          cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
+          sudo cmake --install ~/avogadro-build
+
+      - name: Build plugin
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DAVOGADRO_SRC_DIR=$HOME/avogadrolibs
+          cmake --build build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BackgroundImageScenePlugin-macos-x86_64
+          path: build/BackgroundImageScenePlugin.dylib
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename artifacts
+        run: |
+          mkdir release
+          cp artifacts/BackgroundImageScenePlugin-linux-x86_64/BackgroundImageScenePlugin.so \
+             release/BackgroundImageScenePlugin-linux-x86_64.so
+          cp artifacts/BackgroundImageScenePlugin-windows-x86_64/BackgroundImageScenePlugin.dll \
+             release/BackgroundImageScenePlugin-windows-x86_64.dll
+          cp artifacts/BackgroundImageScenePlugin-macos-x86_64/BackgroundImageScenePlugin.dylib \
+             release/BackgroundImageScenePlugin-macos-x86_64.dylib
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
