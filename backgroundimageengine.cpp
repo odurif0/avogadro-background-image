@@ -14,8 +14,9 @@
 #include <avogadro/rendering/camera.h>
 
 #include <QtWidgets/QFileDialog>
-#include <QtWidgets/QLabel>
+#include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QCheckBox>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QVBoxLayout>
 #include <QFileInfo>
@@ -51,7 +52,8 @@ static const char *compositeFS =
 BackgroundImageDrawable::BackgroundImageDrawable()
   : m_textureId(0), m_textureDirty(true),
     m_fbCopyTexture(0), m_fbCopyW(0), m_fbCopyH(0),
-    m_shaderProgram(0), m_shaderReady(false)
+    m_shaderProgram(0), m_shaderReady(false),
+    m_keepAspectRatio(true)
 {
   setRenderPass(Rendering::Overlay2DPass);
 }
@@ -70,6 +72,11 @@ void BackgroundImageDrawable::setImage(const QImage &image)
 {
   m_image = image;
   m_textureDirty = true;
+}
+
+void BackgroundImageDrawable::setKeepAspectRatio(bool keep)
+{
+  m_keepAspectRatio = keep;
 }
 
 void BackgroundImageDrawable::clearImage()
@@ -214,8 +221,7 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
   gl->glUseProgram(0);
   gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
   gl->glDisable(GL_DEPTH_TEST);
-  gl->glEnable(GL_BLEND);
-  gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  gl->glDisable(GL_BLEND);
   gl->glActiveTexture(GL_TEXTURE0);
 
   glMatrixMode(GL_PROJECTION);
@@ -225,19 +231,38 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
   glPushMatrix();
   glLoadIdentity();
 
-  // ---- Step 3: Draw background image fullscreen ----
+  // ---- Step 3: Clear to black, then draw background image ----
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+
+  // Calculate aspect-ratio-corrected quad coordinates
+  float x0 = -1.0f, y0 = -1.0f, x1 = 1.0f, y1 = 1.0f;
+  if (m_keepAspectRatio && m_image.width() > 0 && m_image.height() > 0 && h > 0) {
+    float imgAspect = static_cast<float>(m_image.width()) / m_image.height();
+    float vpAspect = static_cast<float>(w) / h;
+    if (imgAspect > vpAspect) {
+      float scale = vpAspect / imgAspect;
+      y0 = -scale; y1 = scale;
+    } else if (imgAspect < vpAspect) {
+      float scale = imgAspect / vpAspect;
+      x0 = -scale; x1 = scale;
+    }
+  }
+
   glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
   glEnable(GL_TEXTURE_2D);
   gl->glBindTexture(GL_TEXTURE_2D, m_textureId);
   glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex2f( 1.0f, -1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex2f( 1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f,  1.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(x1, y0);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(x1, y1);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y1);
   glEnd();
   glDisable(GL_TEXTURE_2D);
 
   // ---- Step 4: Draw framebuffer on top with composite shader ----
+  gl->glEnable(GL_BLEND);
+  gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   gl->glUseProgram(m_shaderProgram);
   gl->glActiveTexture(GL_TEXTURE0);
   gl->glBindTexture(GL_TEXTURE_2D, m_fbCopyTexture);
@@ -271,17 +296,19 @@ void BackgroundImageDrawable::clear() { clearImage(); }
 // ==================== BackgroundImageScenePlugin ====================
 
 BackgroundImageScenePlugin::BackgroundImageScenePlugin(QObject *parent)
-  : ScenePlugin(parent), m_setupWidget(nullptr) {}
+  : ScenePlugin(parent), m_activeIndex(-1), m_setupWidget(nullptr),
+    m_keepAspectRatio(true) {}
 
 BackgroundImageScenePlugin::~BackgroundImageScenePlugin() {}
 
 void BackgroundImageScenePlugin::process(const QtGui::Molecule &,
                                           Rendering::GroupNode &node)
 {
-  if (m_image.isNull()) return;
+  if (m_activeIndex < 0 || m_activeIndex >= m_images.size()) return;
   auto *geo = new Rendering::GeometryNode;
   auto *drawable = new BackgroundImageDrawable;
-  drawable->setImage(m_image);
+  drawable->setImage(m_images[m_activeIndex].image);
+  drawable->setKeepAspectRatio(m_keepAspectRatio);
   geo->addDrawable(drawable);
   node.addChild(geo);
 }
@@ -291,61 +318,110 @@ QWidget *BackgroundImageScenePlugin::setupWidget()
   if (!m_setupWidget) {
     m_setupWidget = new QWidget;
     auto *layout = new QVBoxLayout(m_setupWidget);
-    auto *label = new QLabel(m_imagePath.isEmpty()
-                             ? tr("No image loaded")
-                             : QFileInfo(m_imagePath).fileName());
-    label->setObjectName("imagePathLabel");
-    label->setWordWrap(true);
-    if (!m_imagePath.isEmpty()) label->setToolTip(m_imagePath);
 
+    // Image list
+    auto *listWidget = new QListWidget;
+    listWidget->setObjectName("imageList");
+    listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    layout->addWidget(listWidget);
+
+    // Buttons: Load + Remove
     auto *btnLayout = new QHBoxLayout;
-    auto *loadBtn = new QPushButton(tr("Load Image..."));
-    auto *clearBtn = new QPushButton(tr("Clear Image"));
+    auto *loadBtn = new QPushButton(tr("Add Images..."));
+    auto *removeBtn = new QPushButton(tr("Remove"));
     btnLayout->addWidget(loadBtn);
-    btnLayout->addWidget(clearBtn);
-    layout->addWidget(label);
+    btnLayout->addWidget(removeBtn);
     layout->addLayout(btnLayout);
 
-    connect(loadBtn, &QPushButton::clicked, this, &BackgroundImageScenePlugin::loadImage);
-    connect(clearBtn, &QPushButton::clicked, this, &BackgroundImageScenePlugin::clearImageSlot);
+    // Aspect ratio checkbox
+    auto *aspectCheck = new QCheckBox(tr("Keep aspect ratio"));
+    aspectCheck->setObjectName("aspectRatioCheck");
+    aspectCheck->setChecked(m_keepAspectRatio);
+    layout->addWidget(aspectCheck);
+
+    // Connections
+    connect(loadBtn, &QPushButton::clicked, this, &BackgroundImageScenePlugin::loadImages);
+    connect(removeBtn, &QPushButton::clicked, this, &BackgroundImageScenePlugin::removeImage);
+    connect(listWidget, &QListWidget::currentRowChanged, this, &BackgroundImageScenePlugin::selectImage);
+    connect(aspectCheck, &QCheckBox::toggled, this, &BackgroundImageScenePlugin::toggleAspectRatio);
   }
   return m_setupWidget;
 }
 
-void BackgroundImageScenePlugin::loadImage()
+void BackgroundImageScenePlugin::loadImages()
 {
-  QString fp = QFileDialog::getOpenFileName(m_setupWidget, tr("Open Background Image"),
-      m_imagePath, tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"));
-  if (fp.isEmpty()) return;
-  QImage img(fp);
-  if (img.isNull()) return;
-  m_imagePath = fp;
-  m_image = img;
-  updateSettingsWidget();
-  emit drawablesChanged();
-}
+  QStringList files = QFileDialog::getOpenFileNames(
+      m_setupWidget, tr("Open Background Images"), QString(),
+      tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"));
+  if (files.isEmpty()) return;
 
-void BackgroundImageScenePlugin::clearImageSlot()
-{
-  m_imagePath.clear();
-  m_image = QImage();
-  updateSettingsWidget();
-  emit drawablesChanged();
-}
+  auto *listWidget = m_setupWidget->findChild<QListWidget*>("imageList");
+  if (!listWidget) return;
 
-void BackgroundImageScenePlugin::updateSettingsWidget()
-{
-  if (!m_setupWidget) return;
-  auto *label = m_setupWidget->findChild<QLabel*>("imagePathLabel");
-  if (label) {
-    if (m_imagePath.isEmpty()) {
-      label->setText(tr("No image loaded"));
-      label->setToolTip(QString());
-    } else {
-      label->setText(QFileInfo(m_imagePath).fileName());
-      label->setToolTip(m_imagePath);
-    }
+  // Block signals to avoid triggering selectImage for each added item
+  listWidget->blockSignals(true);
+
+  for (const QString &fp : files) {
+    QImage img(fp);
+    if (img.isNull()) continue;
+
+    ImageEntry entry;
+    entry.path = fp;
+    entry.image = img;
+    m_images.append(entry);
+
+    auto *item = new QListWidgetItem(QFileInfo(fp).fileName(), listWidget);
+    item->setToolTip(fp);
   }
+
+  listWidget->blockSignals(false);
+
+  // Select the last added image
+  if (!m_images.isEmpty()) {
+    int lastRow = m_images.size() - 1;
+    listWidget->setCurrentRow(lastRow);
+    m_activeIndex = lastRow;
+  }
+
+  emit drawablesChanged();
+}
+
+void BackgroundImageScenePlugin::removeImage()
+{
+  auto *listWidget = m_setupWidget->findChild<QListWidget*>("imageList");
+  if (!listWidget) return;
+
+  int row = listWidget->currentRow();
+  if (row < 0 || row >= m_images.size()) return;
+
+  m_images.removeAt(row);
+  delete listWidget->takeItem(row);
+
+  // Adjust active index
+  if (m_images.isEmpty()) {
+    m_activeIndex = -1;
+  } else if (row >= m_images.size()) {
+    m_activeIndex = m_images.size() - 1;
+    listWidget->setCurrentRow(m_activeIndex);
+  } else {
+    m_activeIndex = row;
+    listWidget->setCurrentRow(row);
+  }
+
+  emit drawablesChanged();
+}
+
+void BackgroundImageScenePlugin::selectImage(int row)
+{
+  if (row < 0 || row >= m_images.size()) return;
+  m_activeIndex = row;
+  emit drawablesChanged();
+}
+
+void BackgroundImageScenePlugin::toggleAspectRatio(bool checked)
+{
+  m_keepAspectRatio = checked;
+  emit drawablesChanged();
 }
 
 } // namespace Avogadro

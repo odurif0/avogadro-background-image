@@ -15,6 +15,7 @@
 #include <avogadro/rendering/geometrynode.h>
 
 #include <QImage>
+#include <QList>
 #include <QPointer>
 #include <QString>
 
@@ -30,6 +31,7 @@ public:
   ~BackgroundImageDrawable() override;
 
   void setImage(const QImage &image);
+  void setKeepAspectRatio(bool keep);
   void clearImage();
   void render(const Rendering::Camera &camera) override;
   void clear() override;
@@ -42,11 +44,17 @@ private:
   int m_fbCopyW, m_fbCopyH;
   unsigned int m_shaderProgram;
   bool m_shaderReady;
+  bool m_keepAspectRatio;
 
   void uploadTexture();
   bool ensureShader();
 
   Q_DISABLE_COPY(BackgroundImageDrawable)
+};
+
+struct ImageEntry {
+  QString path;
+  QImage image;
 };
 
 class BackgroundImageScenePlugin : public QtGui::ScenePlugin
@@ -68,14 +76,16 @@ public:
   bool hasSetupWidget() const override { return true; }
 
 private:
-  QImage m_image;
-  QString m_imagePath;
+  QList<ImageEntry> m_images;
+  int m_activeIndex;
   QPointer<QWidget> m_setupWidget;
-  void updateSettingsWidget();
+  bool m_keepAspectRatio;
 
 private Q_SLOTS:
-  void loadImage();
-  void clearImageSlot();
+  void loadImages();
+  void removeImage();
+  void selectImage(int row);
+  void toggleAspectRatio(bool checked);
 };
 
 } // namespace Avogadro
