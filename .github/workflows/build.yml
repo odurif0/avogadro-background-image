@@ -10,6 +10,7 @@ on:
 
 env:
   BUILD_TYPE: Release
+  AVOGADRO_TAG: "2.0.0"
 
 jobs:
   build-linux:
@@ -28,15 +29,16 @@ jobs:
           sudo apt-get install -y ninja-build libeigen3-dev libgl1-mesa-dev libglew-dev
 
       - name: Clone avogadrolibs
-        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
+        run: git clone --depth 1 --branch ${{ env.AVOGADRO_TAG }} https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
 
       - name: Build avogadrolibs (minimal)
         run: |
           cmake -S ~/avogadrolibs -B ~/avogadro-build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF \
-            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
-            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DUSE_HDF5=OFF \
+            -DUSE_LIBARCHIVE=OFF -DUSE_LIBMSYM=OFF -DUSE_MMTF=OFF \
+            -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
+            -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
           sudo cmake --install ~/avogadro-build
 
@@ -69,7 +71,7 @@ jobs:
           arch: x64
 
       - name: Clone avogadrolibs
-        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git $env:USERPROFILE\avogadrolibs
+        run: git clone --depth 1 --branch $env:AVOGADRO_TAG https://github.com/OpenChemistry/avogadrolibs.git $env:USERPROFILE\avogadrolibs
 
       - name: Clone and install Eigen
         run: |
@@ -88,9 +90,10 @@ jobs:
           cmake -S "$env:USERPROFILE\avogadrolibs" -B "$env:USERPROFILE\avogadro-build" `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DCMAKE_PREFIX_PATH="$env:USERPROFILE\eigen-install;$env:USERPROFILE\glew-install" `
-            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF `
-            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF `
-            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DUSE_HDF5=OFF `
+            -DUSE_LIBARCHIVE=OFF -DUSE_LIBMSYM=OFF -DUSE_MMTF=OFF `
+            -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF `
+            -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build "$env:USERPROFILE\avogadro-build" --target AvogadroCore AvogadroRendering AvogadroQtGui --config ${{ env.BUILD_TYPE }}
           cmake --install "$env:USERPROFILE\avogadro-build"
 
@@ -122,15 +125,16 @@ jobs:
         run: brew install eigen glew
 
       - name: Clone avogadrolibs
-        run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
+        run: git clone --depth 1 --branch ${{ env.AVOGADRO_TAG }} https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
 
       - name: Build avogadrolibs (minimal)
         run: |
           cmake -S ~/avogadrolibs -B ~/avogadro-build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF \
-            -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
-            -DQT_VERSION=6 -DBUILD_TESTING=OFF
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DUSE_HDF5=OFF \
+            -DUSE_LIBARCHIVE=OFF -DUSE_LIBMSYM=OFF -DUSE_MMTF=OFF \
+            -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
+            -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
           sudo cmake --install ~/avogadro-build
 
