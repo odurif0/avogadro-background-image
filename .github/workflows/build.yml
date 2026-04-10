@@ -35,7 +35,7 @@ jobs:
         run: |
           cmake -S ~/avogadrolibs -B ~/avogadro-build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF \
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF \
             -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
             -DQT_VERSION=6 -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
@@ -79,7 +79,8 @@ jobs:
         run: |
           cmake -S "$env:USERPROFILE\avogadrolibs" -B "$env:USERPROFILE\avogadro-build" `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF `
+            -DCMAKE_PREFIX_PATH="$env:USERPROFILE\eigen" `
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF `
             -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF `
             -DQT_VERSION=6 -DBUILD_TESTING=OFF
           cmake --build "$env:USERPROFILE\avogadro-build" --target AvogadroCore AvogadroRendering AvogadroQtGui --config ${{ env.BUILD_TYPE }}
@@ -119,7 +120,7 @@ jobs:
         run: |
           cmake -S ~/avogadrolibs -B ~/avogadro-build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DUSE_VTK=OFF -DBUILD_GPL_PLUGINS=OFF \
+            -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF \
             -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF \
             -DQT_VERSION=6 -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
