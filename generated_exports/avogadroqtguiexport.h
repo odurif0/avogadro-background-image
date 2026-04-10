@@ -1,0 +1,1 @@
+#define AVOGADROQTGUI_EXPORT

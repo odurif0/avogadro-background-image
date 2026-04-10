@@ -1,0 +1,1 @@
+#define AVOGADROCORE_EXPORT
