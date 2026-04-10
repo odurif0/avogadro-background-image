@@ -10,7 +10,6 @@ on:
 
 env:
   BUILD_TYPE: Release
-  AVOGADRO_VERSION: master
 
 jobs:
   build-linux:
@@ -26,9 +25,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libeigen3-dev libgl1-mesa-dev
+          sudo apt-get install -y ninja-build libeigen3-dev libgl1-mesa-dev libglew-dev
 
-      - name: Clone avogadrolibs headers
+      - name: Clone avogadrolibs
         run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
 
       - name: Build avogadrolibs (minimal)
@@ -69,17 +68,26 @@ jobs:
         with:
           arch: x64
 
-      - name: Clone avogadrolibs headers
+      - name: Clone avogadrolibs
         run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git $env:USERPROFILE\avogadrolibs
 
-      - name: Clone Eigen
-        run: git clone --depth 1 https://gitlab.com/libeigen/eigen.git $env:USERPROFILE\eigen
+      - name: Clone and install Eigen
+        run: |
+          git clone --depth 1 https://gitlab.com/libeigen/eigen.git $env:USERPROFILE\eigen
+          cmake -S "$env:USERPROFILE\eigen" -B "$env:USERPROFILE\eigen-build" -DCMAKE_INSTALL_PREFIX="$env:USERPROFILE\eigen-install"
+          cmake --build "$env:USERPROFILE\eigen-build" --target install --config ${{ env.BUILD_TYPE }}
+
+      - name: Clone and build GLEW
+        run: |
+          git clone --depth 1 https://github.com/nigels-com/glew.git $env:USERPROFILE\glew
+          cmake -S "$env:USERPROFILE\glew/build/cmake" -B "$env:USERPROFILE\glew-build" -DCMAKE_INSTALL_PREFIX="$env:USERPROFILE\glew-install"
+          cmake --build "$env:USERPROFILE\glew-build" --target install --config ${{ env.BUILD_TYPE }}
 
       - name: Build avogadrolibs (minimal)
         run: |
           cmake -S "$env:USERPROFILE\avogadrolibs" -B "$env:USERPROFILE\avogadro-build" `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DCMAKE_PREFIX_PATH="$env:USERPROFILE\eigen" `
+            -DCMAKE_PREFIX_PATH="$env:USERPROFILE\eigen-install;$env:USERPROFILE\glew-install" `
             -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DBUILD_GPL_PLUGINS=OFF `
             -DBUILD_MOLEQUEUE=OFF -DWITH_COORDGEN=OFF `
             -DQT_VERSION=6 -DBUILD_TESTING=OFF
@@ -110,10 +118,10 @@ jobs:
         with:
           version: '6.8.1'
 
-      - name: Install Eigen
-        run: brew install eigen
+      - name: Install dependencies
+        run: brew install eigen glew
 
-      - name: Clone avogadrolibs headers
+      - name: Clone avogadrolibs
         run: git clone --depth 1 https://github.com/OpenChemistry/avogadrolibs.git ~/avogadrolibs
 
       - name: Build avogadrolibs (minimal)
