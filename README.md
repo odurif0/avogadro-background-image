@@ -14,6 +14,12 @@ sudo cp BackgroundImageScenePlugin-linux-x86_64.so /usr/lib64/avogadro2/plugins/
 
 # Debian/Ubuntu
 sudo cp BackgroundImageScenePlugin-linux-x86_64.so /usr/lib/x86_64-linux-gnu/avogadro2/plugins/BackgroundImageScenePlugin.so
+
+# Flatpak (Avogadro 2 from Flathub)
+mkdir -p ~/.local/share/avogadro2-extra/lib64/avogadro2/plugins
+cp BackgroundImageScenePlugin-linux-x86_64.so ~/.local/share/avogadro2-extra/lib64/avogadro2/plugins/BackgroundImageScenePlugin.so
+flatpak override --user --filesystem=~/.local/share/avogadro2-extra org.openchemistry.Avogadro2
+flatpak override --user --env=AVOGADRO_PLUGIN_DIR=~/.local/share/avogadro2-extra org.openchemistry.Avogadro2
 ```
 
 ### Windows
@@ -65,11 +71,13 @@ sudo make install
 
 ## How it works
 
-The plugin uses Avogadro's `Overlay2DPass` (last render pass):
+The plugin registers as an `Overlay2DPass` drawable, which is the last render pass in Avogadro's pipeline (after all molecule geometry has been drawn). On each frame:
 
-1. Copies the current framebuffer (with molecule) to a texture
-2. Draws the user's background image fullscreen
-3. Recomposites the molecule on top via a GLSL shader that makes black (empty) areas transparent
+1. **Framebuffer capture** — the current framebuffer (containing the fully rendered molecule) is copied to a texture via `glCopyTexSubImage2D`, with a `glReadPixels` fallback for multisampled FBOs
+2. **Single-pass compositing** — a fullscreen quad is drawn using VBO+VAO (OpenGL core profile compatible) with a combined GLSL shader that:
+   - Samples the user's background image (with configurable aspect-ratio letterbox/pillarbox via UV transform)
+   - Samples the saved framebuffer texture
+   - Blends the molecule over the background using luminance-based alpha (dark/empty areas become transparent)
 
 ## License
 

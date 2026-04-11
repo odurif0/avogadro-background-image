@@ -2,11 +2,14 @@
   Background Image Scene Plugin for Avogadro 2
 
   Rendering technique:
-    Uses Overlay2DPass (renders last, after all molecule geometry).
-    1. Copy the current framebuffer to a texture (contains molecule)
-    2. Draw the user's background image fullscreen
-    3. Redraw the saved framebuffer on top using a GLSL shader
-       that makes black (empty) areas transparent
+    Overlay2DPass (renders last, after all molecule geometry).
+    1. Copy the current framebuffer (molecule) to a texture via
+       glCopyTexSubImage2D (with glReadPixels fallback for MSAA FBOs)
+    2. Draw a single fullscreen quad with a combined GLSL shader that:
+       - Samples the background image (with aspect-ratio letterbox/pillarbox)
+       - Samples the saved framebuffer
+       - Uses luminance of the framebuffer to blend molecule over background
+    3. Uses VBO+VAO for OpenGL core profile compatibility
 ******************************************************************************/
 
 #include "backgroundimageengine.h"
@@ -22,6 +25,8 @@
 #include <QFileInfo>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QOpenGLExtraFunctions>
+#include <QSizePolicy>
 
 #include <QLoggingCategory>
 
@@ -31,7 +36,8 @@ namespace Avogadro {
 
 // ==================== BackgroundImageDrawable ====================
 
-static const char *compositeVS =
+// Single combined shader: reads background image + framebuffer, blends by luminance
+static const char *combinedVS =
   "attribute vec2 aPos;\n"
   "varying vec2 vUV;\n"
   "void main() {\n"
@@ -39,14 +45,23 @@ static const char *compositeVS =
   "  vUV = aPos * 0.5 + 0.5;\n"
   "}\n";
 
-static const char *compositeFS =
-  "uniform sampler2D uTex;\n"
+static const char *combinedFS =
+  "uniform sampler2D uBackground;\n"
+  "uniform sampler2D uFramebuffer;\n"
+  "uniform vec2 uBgUVOffset;\n"
+  "uniform vec2 uBgUVScale;\n"
   "varying vec2 vUV;\n"
   "void main() {\n"
-  "  vec4 c = texture2D(uTex, vUV);\n"
-  "  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));\n"
-  "  float alpha = smoothstep(0.015, 0.06, lum);\n"
-  "  gl_FragColor = vec4(c.rgb, alpha);\n"
+  "  vec2 bgUV = (vUV - uBgUVOffset) / uBgUVScale;\n"
+  "  vec4 bg;\n"
+  "  if (bgUV.x < 0.0 || bgUV.x > 1.0 || bgUV.y < 0.0 || bgUV.y > 1.0)\n"
+  "    bg = vec4(0.0, 0.0, 0.0, 1.0);\n"
+  "  else\n"
+  "    bg = texture2D(uBackground, bgUV);\n"
+  "  vec4 fb = texture2D(uFramebuffer, vUV);\n"
+  "  float lum = dot(fb.rgb, vec3(0.299, 0.587, 0.114));\n"
+  "  float alpha = smoothstep(0.03, 0.12, lum);\n"
+  "  gl_FragColor = mix(bg, fb, alpha);\n"
   "}\n";
 
 BackgroundImageDrawable::BackgroundImageDrawable()
@@ -116,9 +131,13 @@ bool BackgroundImageDrawable::ensureShader()
   if (!ctx) return false;
   QOpenGLFunctions *gl = ctx->functions();
 
-  GLuint vs = compileShader(gl, GL_VERTEX_SHADER, compositeVS);
-  GLuint fs = compileShader(gl, GL_FRAGMENT_SHADER, compositeFS);
-  if (!vs || !fs) return false;
+  GLuint vs = compileShader(gl, GL_VERTEX_SHADER, combinedVS);
+  GLuint fs = compileShader(gl, GL_FRAGMENT_SHADER, combinedFS);
+  if (!vs || !fs) {
+    if (vs) gl->glDeleteShader(vs);
+    if (fs) gl->glDeleteShader(fs);
+    return false;
+  }
 
   m_shaderProgram = gl->glCreateProgram();
   gl->glAttachShader(m_shaderProgram, vs);
@@ -134,6 +153,8 @@ bool BackgroundImageDrawable::ensureShader()
     qCWarning(LOG_BG, "Shader link error: %s", log);
     gl->glDeleteProgram(m_shaderProgram);
     m_shaderProgram = 0;
+    gl->glDeleteShader(vs);
+    gl->glDeleteShader(fs);
     return false;
   }
 
@@ -176,7 +197,7 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
   if (!ctx) return;
   QOpenGLFunctions *gl = ctx->functions();
 
-  // ---- Save entire GL state ----
+  // ---- Save GL state ----
   GLint savedProg = 0;
   gl->glGetIntegerv(GL_CURRENT_PROGRAM, &savedProg);
   GLboolean savedBlend = glIsEnabled(GL_BLEND);
@@ -186,8 +207,11 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
   gl->glGetIntegerv(GL_BLEND_DST_ALPHA, &savedBlendDst);
   GLint savedActiveTex = 0;
   gl->glGetIntegerv(GL_ACTIVE_TEXTURE, &savedActiveTex);
-  GLint savedTexBound = 0;
-  gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &savedTexBound);
+  GLint savedTexBound0 = 0, savedTexBound1 = 0;
+  gl->glActiveTexture(GL_TEXTURE0);
+  gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &savedTexBound0);
+  gl->glActiveTexture(GL_TEXTURE1);
+  gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &savedTexBound1);
   GLint savedViewport[4];
   gl->glGetIntegerv(GL_VIEWPORT, savedViewport);
   int w = savedViewport[2], h = savedViewport[3];
@@ -197,7 +221,7 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
   uploadTexture();
   if (!m_textureId) { gl->glUseProgram(savedProg); return; }
 
-  // Compile composite shader (once)
+  // Compile shader (once)
   if (!ensureShader()) { gl->glUseProgram(savedProg); return; }
 
   // ---- Step 1: Copy current framebuffer (molecule) to texture ----
@@ -208,86 +232,90 @@ void BackgroundImageDrawable::render(const Rendering::Camera &)
     m_fbCopyW = w;
     m_fbCopyH = h;
   }
+  gl->glActiveTexture(GL_TEXTURE1);
   gl->glBindTexture(GL_TEXTURE_2D, m_fbCopyTexture);
   if (fbSizeChanged) {
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
-  gl->glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, w, h, 0);
+  gl->glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+  if (gl->glGetError() != GL_NO_ERROR) {
+    // Fallback for multisampled FBOs
+    std::vector<unsigned char> pixels(w * h * 4);
+    gl->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    if (gl->glGetError() == GL_NO_ERROR)
+      gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+  }
 
-  // ---- Step 2: Setup 2D state ----
-  gl->glUseProgram(0);
-  gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
+  // ---- Step 2: Setup state ----
   gl->glDisable(GL_DEPTH_TEST);
   gl->glDisable(GL_BLEND);
+
+  // ---- Step 3: Single draw with combined shader ----
+  gl->glUseProgram(m_shaderProgram);
+
+  // Bind background image to texture unit 0
   gl->glActiveTexture(GL_TEXTURE0);
+  gl->glBindTexture(GL_TEXTURE_2D, m_textureId);
+  gl->glUniform1i(gl->glGetUniformLocation(m_shaderProgram, "uBackground"), 0);
 
-  glMatrixMode(GL_PROJECTION);
-  glPushMatrix();
-  glLoadIdentity();
-  glMatrixMode(GL_MODELVIEW);
-  glPushMatrix();
-  glLoadIdentity();
+  // Bind framebuffer copy to texture unit 1
+  gl->glActiveTexture(GL_TEXTURE1);
+  gl->glBindTexture(GL_TEXTURE_2D, m_fbCopyTexture);
+  gl->glUniform1i(gl->glGetUniformLocation(m_shaderProgram, "uFramebuffer"), 1);
 
-  // ---- Step 3: Clear to black, then draw background image ----
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-
-  // Calculate aspect-ratio-corrected quad coordinates
-  float x0 = -1.0f, y0 = -1.0f, x1 = 1.0f, y1 = 1.0f;
+  // Compute aspect-ratio UV transform: bgUV = (vUV - offset) / scale
+  float bgScaleX = 1.0f, bgScaleY = 1.0f;
+  float bgOffsetX = 0.0f, bgOffsetY = 0.0f;
   if (m_keepAspectRatio && m_image.width() > 0 && m_image.height() > 0 && h > 0) {
     float imgAspect = static_cast<float>(m_image.width()) / m_image.height();
     float vpAspect = static_cast<float>(w) / h;
     if (imgAspect > vpAspect) {
       float scale = vpAspect / imgAspect;
-      y0 = -scale; y1 = scale;
+      bgScaleY = scale;
+      bgOffsetY = (1.0f - scale) * 0.5f;
     } else if (imgAspect < vpAspect) {
       float scale = imgAspect / vpAspect;
-      x0 = -scale; x1 = scale;
+      bgScaleX = scale;
+      bgOffsetX = (1.0f - scale) * 0.5f;
     }
   }
+  gl->glUniform2f(gl->glGetUniformLocation(m_shaderProgram, "uBgUVOffset"), bgOffsetX, bgOffsetY);
+  gl->glUniform2f(gl->glGetUniformLocation(m_shaderProgram, "uBgUVScale"), bgScaleX, bgScaleY);
 
-  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-  glEnable(GL_TEXTURE_2D);
-  gl->glBindTexture(GL_TEXTURE_2D, m_textureId);
-  glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f); glVertex2f(x0, y0);
-    glTexCoord2f(1.0f, 0.0f); glVertex2f(x1, y0);
-    glTexCoord2f(1.0f, 1.0f); glVertex2f(x1, y1);
-    glTexCoord2f(0.0f, 1.0f); glVertex2f(x0, y1);
-  glEnd();
-  glDisable(GL_TEXTURE_2D);
-
-  // ---- Step 4: Draw framebuffer on top with composite shader ----
-  gl->glEnable(GL_BLEND);
-  gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  gl->glUseProgram(m_shaderProgram);
-  gl->glActiveTexture(GL_TEXTURE0);
-  gl->glBindTexture(GL_TEXTURE_2D, m_fbCopyTexture);
-  GLint texLoc = gl->glGetUniformLocation(m_shaderProgram, "uTex");
-  gl->glUniform1i(texLoc, 0);
-
+  // Draw fullscreen quad using VBO+VAO (required for OpenGL core profile)
+  QOpenGLExtraFunctions *glx = ctx->extraFunctions();
   static const float quadVerts[] = { -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f };
+
+  GLuint vao = 0, vbo = 0;
+  glx->glGenVertexArrays(1, &vao);
+  glx->glBindVertexArray(vao);
+  gl->glGenBuffers(1, &vbo);
+  gl->glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  gl->glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_STATIC_DRAW);
   gl->glEnableVertexAttribArray(0);
-  gl->glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, quadVerts);
+  gl->glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
   gl->glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
   gl->glDisableVertexAttribArray(0);
+  glx->glBindVertexArray(0);
+  glx->glDeleteVertexArrays(1, &vao);
+  gl->glDeleteBuffers(1, &vbo);
+  gl->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
   // ---- Restore GL state ----
-  glMatrixMode(GL_PROJECTION);
-  glPopMatrix();
-  glMatrixMode(GL_MODELVIEW);
-  glPopMatrix();
-
   if (!savedDepthTest) gl->glDisable(GL_DEPTH_TEST);
   else gl->glEnable(GL_DEPTH_TEST);
   if (!savedBlend) gl->glDisable(GL_BLEND);
   else gl->glEnable(GL_BLEND);
   gl->glBlendFunc(savedBlendSrc, savedBlendDst);
+  gl->glActiveTexture(GL_TEXTURE1);
+  gl->glBindTexture(GL_TEXTURE_2D, savedTexBound1);
+  gl->glActiveTexture(GL_TEXTURE0);
+  gl->glBindTexture(GL_TEXTURE_2D, savedTexBound0);
   gl->glActiveTexture(savedActiveTex);
-  gl->glBindTexture(GL_TEXTURE_2D, savedTexBound);
   gl->glUseProgram(savedProg);
 }
 
@@ -317,12 +345,15 @@ QWidget *BackgroundImageScenePlugin::setupWidget()
 {
   if (!m_setupWidget) {
     m_setupWidget = new QWidget;
+    m_setupWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     auto *layout = new QVBoxLayout(m_setupWidget);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     // Image list
     auto *listWidget = new QListWidget;
     listWidget->setObjectName("imageList");
     listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    listWidget->setMaximumHeight(100);
     layout->addWidget(listWidget);
 
     // Buttons: Load + Remove

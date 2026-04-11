@@ -42,7 +42,7 @@ private:
   bool m_textureDirty;
   unsigned int m_fbCopyTexture;
   int m_fbCopyW, m_fbCopyH;
-  unsigned int m_shaderProgram;
+  unsigned int m_shaderProgram; // single combined shader
   bool m_shaderReady;
   bool m_keepAspectRatio;
 
