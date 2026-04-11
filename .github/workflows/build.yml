@@ -113,9 +113,11 @@ jobs:
       - name: Install avogadrolibs
         shell: bash
         run: |
-          cmake --install "$USERPROFILE/avogadro-build" --config ${{ env.BUILD_TYPE }} || true
-          ls -la "$USERPROFILE/avogadro-install/bin/" 2>/dev/null || true
-          find "$USERPROFILE/avogadro-install" -name "Avogadro*" -type f 2>/dev/null || true
+          # cmake --install fails on libgwavi, so copy DLLs manually
+          mkdir -p "$USERPROFILE/avogadro-install/bin"
+          # Find and copy all Avogadro DLLs from build tree
+          find "$USERPROFILE/avogadro-build" -name "Avogadro*.dll" -type f -exec cp {} "$USERPROFILE/avogadro-install/bin/" \;
+          ls -la "$USERPROFILE/avogadro-install/bin/"
 
       - name: Build plugin
         run: |
