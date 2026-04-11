@@ -113,7 +113,7 @@ jobs:
           path: build/${{ env.BUILD_TYPE }}/BackgroundImageScenePlugin.dll
 
   build-macos:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -150,7 +150,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BackgroundImageScenePlugin-macos-x86_64
+          name: BackgroundImageScenePlugin-macos-arm64
           path: build/BackgroundImageScenePlugin.dylib
 
   release:
@@ -171,8 +171,8 @@ jobs:
              release/BackgroundImageScenePlugin-linux-x86_64.so
           cp artifacts/BackgroundImageScenePlugin-windows-x86_64/BackgroundImageScenePlugin.dll \
              release/BackgroundImageScenePlugin-windows-x86_64.dll
-          cp artifacts/BackgroundImageScenePlugin-macos-x86_64/BackgroundImageScenePlugin.dylib \
-             release/BackgroundImageScenePlugin-macos-x86_64.dylib
+          cp artifacts/BackgroundImageScenePlugin-macos-arm64/BackgroundImageScenePlugin.dylib \
+             release/BackgroundImageScenePlugin-macos-arm64.dylib
 
       - name: Create release
         uses: softprops/action-gh-release@v2
