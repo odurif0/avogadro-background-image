@@ -38,12 +38,14 @@ target_include_directories(BackgroundImageScenePlugin
 # Link against Qt6 and installed Avogadro libraries
 # Find versioned .so.N (dev symlinks may be absent)
 find_library(AVOGADRO_QTGUI_LIB
-  NAMES AvogadroQtGui AvogadroQtGui.so.1
+  NAMES AvogadroQtGui AvogadroQtGui.so.2 AvogadroQtGui.so.1
   PATHS /usr/lib64 /usr/lib /usr/lib/x86_64-linux-gnu
+        $ENV{HOME}/avogadro-install/lib
 )
 find_library(AVOGADRO_RENDERING_LIB
-  NAMES AvogadroRendering AvogadroRendering.so.1
+  NAMES AvogadroRendering AvogadroRendering.so.2 AvogadroRendering.so.1
   PATHS /usr/lib64 /usr/lib /usr/lib/x86_64-linux-gnu
+        $ENV{HOME}/avogadro-install/lib
 )
 if(NOT AVOGADRO_QTGUI_LIB OR NOT AVOGADRO_RENDERING_LIB)
   message(FATAL_ERROR
