@@ -40,7 +40,7 @@ jobs:
             -DUSE_PLOTTER=OFF \
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
-          cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
+          cmake --build ~/avogadro-build --target Core Rendering QtGui
           sudo cmake --install ~/avogadro-build
 
       - name: Build plugin
@@ -95,7 +95,7 @@ jobs:
             -DUSE_LIBARCHIVE=OFF -DUSE_LIBMSYM=OFF -DUSE_MMTF=OFF `
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF `
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
-          cmake --build "$env:USERPROFILE\avogadro-build" --target AvogadroCore AvogadroRendering AvogadroQtGui --config ${{ env.BUILD_TYPE }}
+          cmake --build "$env:USERPROFILE\avogadro-build" --target Core Rendering QtGui --config ${{ env.BUILD_TYPE }}
           cmake --install "$env:USERPROFILE\avogadro-build"
 
       - name: Build plugin
@@ -137,7 +137,7 @@ jobs:
             -DUSE_PLOTTER=OFF \
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
-          cmake --build ~/avogadro-build --target AvogadroCore AvogadroRendering AvogadroQtGui
+          cmake --build ~/avogadro-build --target Core Rendering QtGui
           sudo cmake --install ~/avogadro-build
 
       - name: Build plugin
