@@ -113,11 +113,12 @@ jobs:
       - name: Install avogadrolibs
         shell: bash
         run: |
-          # cmake --install fails on libgwavi, so copy DLLs manually
-          mkdir -p "$USERPROFILE/avogadro-install/bin"
-          # Find and copy all Avogadro DLLs from build tree
+          # cmake --install fails on libgwavi, so copy files manually
+          mkdir -p "$USERPROFILE/avogadro-install/bin" "$USERPROFILE/avogadro-install/lib"
+          # Copy DLLs and import libraries (.lib) for linking
           find "$USERPROFILE/avogadro-build" -name "Avogadro*.dll" -type f -exec cp {} "$USERPROFILE/avogadro-install/bin/" \;
-          ls -la "$USERPROFILE/avogadro-install/bin/"
+          find "$USERPROFILE/avogadro-build" -name "Avogadro*.lib" -type f -exec cp {} "$USERPROFILE/avogadro-install/lib/" \;
+          ls -la "$USERPROFILE/avogadro-install/bin/" "$USERPROFILE/avogadro-install/lib/"
 
       - name: Build plugin
         run: |
@@ -125,8 +126,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
             -DAVOGADRO_SRC_DIR="$env:USERPROFILE\avogadrolibs" `
             -DEIGEN_SRC_DIR="$env:USERPROFILE\eigen" `
-            -DAVOGADRO_QTGUI_LIB="$env:USERPROFILE\avogadro-install\bin\AvogadroQtGui.dll" `
-            -DAVOGADRO_RENDERING_LIB="$env:USERPROFILE\avogadro-install\bin\AvogadroRendering.dll"
+            -DAVOGADRO_QTGUI_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroQtGui.lib" `
+            -DAVOGADRO_RENDERING_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroRendering.lib"
           cmake --build build --config ${{ env.BUILD_TYPE }}
 
       - name: Upload artifact
