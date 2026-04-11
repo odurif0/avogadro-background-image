@@ -105,6 +105,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$env:USERPROFILE\eigen-install;$env:USERPROFILE\glew-install" `
             -DUSE_VTK=OFF -DUSE_SPGLIB=OFF -DUSE_HDF5=OFF `
             -DUSE_LIBARCHIVE=OFF -DUSE_LIBMSYM=OFF -DUSE_MMTF=OFF `
+            -DUSE_PLOTTER=OFF `
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF `
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build "$env:USERPROFILE\avogadro-build" --target Core Rendering QtGui --config ${{ env.BUILD_TYPE }}
