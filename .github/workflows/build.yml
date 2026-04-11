@@ -42,7 +42,11 @@ jobs:
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target Core Rendering QtGui
-          cmake --install ~/avogadro-build || true
+          # Manually install libs (cmake --install fails on libgwavi which we didn't build)
+          mkdir -p $HOME/avogadro-install/lib
+          cp ~/avogadro-build/lib/libAvogadroQtGui.so* $HOME/avogadro-install/lib/
+          cp ~/avogadro-build/lib/libAvogadroRendering.so* $HOME/avogadro-install/lib/
+          cp ~/avogadro-build/lib/libAvogadroCore.so* $HOME/avogadro-install/lib/
 
       - name: Build plugin
         run: |
@@ -102,8 +106,11 @@ jobs:
           cmake --build "$env:USERPROFILE\avogadro-build" --target Core Rendering QtGui --config ${{ env.BUILD_TYPE }}
 
       - name: Install avogadrolibs
-        run: cmake --install "$env:USERPROFILE\avogadro-build" --config ${{ env.BUILD_TYPE }}
-        continue-on-error: true
+        shell: bash
+        run: |
+          cmake --install "$USERPROFILE/avogadro-build" --config ${{ env.BUILD_TYPE }} || true
+          ls -la "$USERPROFILE/avogadro-install/bin/" 2>/dev/null || true
+          find "$USERPROFILE/avogadro-install" -name "Avogadro*" -type f 2>/dev/null || true
 
       - name: Build plugin
         run: |
@@ -148,13 +155,22 @@ jobs:
             -DBUILD_GPL_PLUGINS=OFF -DBUILD_MOLEQUEUE=OFF \
             -DWITH_COORDGEN=OFF -DBUILD_TESTING=OFF
           cmake --build ~/avogadro-build --target Core Rendering QtGui
-          cmake --install ~/avogadro-build || true
+          # Manually install libs (cmake --install fails on libgwavi which we didn't build)
+          mkdir -p $HOME/avogadro-install/lib
+          cp ~/avogadro-build/lib/libAvogadroQtGui.* $HOME/avogadro-install/lib/
+          cp ~/avogadro-build/lib/libAvogadroRendering.* $HOME/avogadro-install/lib/
+          cp ~/avogadro-build/lib/libAvogadroCore.* $HOME/avogadro-install/lib/
+
+      - name: Get Eigen prefix
+        id: eigen
+        run: echo "prefix=$(brew --prefix eigen)" >> $GITHUB_OUTPUT
 
       - name: Build plugin
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DAVOGADRO_SRC_DIR=$HOME/avogadrolibs \
+            -DEIGEN_SRC_DIR=${{ steps.eigen.outputs.prefix }}/include/eigen3 \
             -DAVOGADRO_QTGUI_LIB=$HOME/avogadro-install/lib/libAvogadroQtGui.2.0.0.dylib \
             -DAVOGADRO_RENDERING_LIB=$HOME/avogadro-install/lib/libAvogadroRendering.2.0.0.dylib
           cmake --build build
