@@ -2,14 +2,6 @@
 
 Standalone plugin that displays a user-loaded image as the viewport background in [Avogadro 2](https://avogadro.cc/), allowing molecule construction on top of the image (like a puzzle guide).
 
-## Features
-
-- Load multiple images (PNG, JPG, BMP, TIFF) as viewport background
-- Switch between images via a list in the settings panel
-- Keep aspect ratio option (enabled by default)
-- Molecule renders on top with correct transparency
-- Simple UI in Display Type Settings
-
 ## Quick Install (pre-built binaries)
 
 Download the latest release for your platform from the [Releases page](https://github.com/odurif0/avogadro-background-image/releases), then copy the plugin file to the Avogadro plugins directory.
@@ -41,7 +33,7 @@ cp BackgroundImageScenePlugin-macos-x86_64.dylib \
 
 ### Requirements
 
-- Avogadro 2 installed (tested with 1.100.0)
+- Avogadro 2 installed (tested with 2.0.0)
 - Qt 6
 - CMake 3.16+
 - [avogadrolibs](https://github.com/OpenChemistry/avogadrolibs) source (for headers)
@@ -82,7 +74,3 @@ The plugin uses Avogadro's `Overlay2DPass` (last render pass):
 ## License
 
 MIT
-
----
-
-*Developed with assistance from [GLM-5.1](https://chatglm.ai).*
