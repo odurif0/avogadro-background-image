@@ -89,11 +89,13 @@ jobs:
             -DEIGEN_BUILD_BLAS=OFF -DEIGEN_BUILD_LAPACK=OFF -DBUILD_TESTING=OFF
           cmake --build "$env:USERPROFILE\eigen-build" --target install --config ${{ env.BUILD_TYPE }}
 
-      - name: Clone and build GLEW
+      - name: Download and build GLEW
+        shell: bash
         run: |
-          git clone --depth 1 https://github.com/nigels-com/glew.git $env:USERPROFILE\glew
-          cmake -S "$env:USERPROFILE\glew/build/cmake" -B "$env:USERPROFILE\glew-build" -DCMAKE_INSTALL_PREFIX="$env:USERPROFILE\glew-install"
-          cmake --build "$env:USERPROFILE\glew-build" --target install --config ${{ env.BUILD_TYPE }}
+          curl -sL https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.zip -o glew.zip
+          unzip -q glew.zip
+          cmake -S glew-2.2.0/build/cmake -B glew-build -DCMAKE_INSTALL_PREFIX="$USERPROFILE/glew-install"
+          cmake --build glew-build --target install --config Release
 
       - name: Build avogadrolibs (minimal)
         run: |
