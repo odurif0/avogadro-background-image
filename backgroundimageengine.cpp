@@ -150,7 +150,7 @@ void BackgroundImageDrawable::uploadTexture()
   if (!ctx) return;
   QOpenGLFunctions *gl = ctx->functions();
 
-  QImage glImage = m_image.flipped(Qt::Vertical).convertToFormat(QImage::Format_RGBA8888);
+  QImage glImage = m_image.mirrored(false, true).convertToFormat(QImage::Format_RGBA8888);
   if (glImage.isNull()) return;
 
   if (m_textureId) { gl->glDeleteTextures(1, &m_textureId); m_textureId = 0; }

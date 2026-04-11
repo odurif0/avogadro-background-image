@@ -84,7 +84,9 @@ jobs:
       - name: Clone and install Eigen
         run: |
           git clone --depth 1 https://gitlab.com/libeigen/eigen.git $env:USERPROFILE\eigen
-          cmake -S "$env:USERPROFILE\eigen" -B "$env:USERPROFILE\eigen-build" -DCMAKE_INSTALL_PREFIX="$env:USERPROFILE\eigen-install"
+          cmake -S "$env:USERPROFILE\eigen" -B "$env:USERPROFILE\eigen-build" `
+            -DCMAKE_INSTALL_PREFIX="$env:USERPROFILE\eigen-install" `
+            -DEIGEN_BUILD_BLAS=OFF -DEIGEN_BUILD_LAPACK=OFF -DBUILD_TESTING=OFF
           cmake --build "$env:USERPROFILE\eigen-build" --target install --config ${{ env.BUILD_TYPE }}
 
       - name: Clone and build GLEW

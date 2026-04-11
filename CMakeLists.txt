@@ -33,6 +33,7 @@ target_include_directories(BackgroundImageScenePlugin
     ${AVOGADRO_SRC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/generated_exports
     ${EIGEN_SRC_DIR}
+    /usr/include/eigen3
 )
 
 # Link against Qt6 and installed Avogadro libraries
