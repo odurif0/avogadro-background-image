@@ -48,11 +48,17 @@ find_library(AVOGADRO_RENDERING_LIB
   PATHS /usr/lib64 /usr/lib /usr/lib/x86_64-linux-gnu
         $ENV{HOME}/avogadro-install/lib
 )
+find_library(AVOGADRO_CORE_LIB
+  NAMES AvogadroCore AvogadroCore.so.2 AvogadroCore.so.1
+  PATHS /usr/lib64 /usr/lib /usr/lib/x86_64-linux-gnu
+        $ENV{HOME}/avogadro-install/lib
+)
 if(NOT AVOGADRO_QTGUI_LIB OR NOT AVOGADRO_RENDERING_LIB)
   message(FATAL_ERROR
     "Avogadro libraries not found. Install avogadrolibs-devel or pass\n"
     "  -DAVOGADRO_QTGUI_LIB=/path/to/libAvogadroQtGui.so.1\n"
-    "  -DAVOGADRO_RENDERING_LIB=/path/to/libAvogadroRendering.so.1"
+    "  -DAVOGADRO_RENDERING_LIB=/path/to/libAvogadroRendering.so.1\n"
+    "  -DAVOGADRO_CORE_LIB=/path/to/libAvogadroCore.so.1"
   )
 endif()
 
@@ -62,6 +68,8 @@ target_link_libraries(BackgroundImageScenePlugin
     Qt6::OpenGL
     ${AVOGADRO_QTGUI_LIB}
     ${AVOGADRO_RENDERING_LIB}
+    ${AVOGADRO_CORE_LIB}
+    $<$<PLATFORM_ID:Windows>:opengl32>
 )
 
 # No "lib" prefix for Qt plugins

@@ -127,7 +127,8 @@ jobs:
             -DAVOGADRO_SRC_DIR="$env:USERPROFILE\avogadrolibs" `
             -DEIGEN_SRC_DIR="$env:USERPROFILE\eigen" `
             -DAVOGADRO_QTGUI_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroQtGui.lib" `
-            -DAVOGADRO_RENDERING_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroRendering.lib"
+            -DAVOGADRO_RENDERING_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroRendering.lib" `
+            -DAVOGADRO_CORE_LIB="$env:USERPROFILE\avogadro-install\lib\AvogadroCore.lib"
           cmake --build build --config ${{ env.BUILD_TYPE }}
 
       - name: Upload artifact
